@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TPASS 回本計算機</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: #f8fafc;
+        }
+        .drop-zone--over {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+    </style>
+</head>
+<body class="text-slate-800 min-h-screen flex flex-col">
+
+    <header class="bg-gradient-to-r from-blue-700 to-indigo-800 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight">TPASS 回本計算機</h1>
+                <p class="text-blue-100 text-sm mt-1">我的TPASS 1200有沒有刷回本？ — 支援台鐵、台北捷運/環狀線、桃園捷運 PDF 乘車明細解析</p>
+            </div>
+            <div class="bg-blue-600/50 px-3 py-1.5 rounded-lg text-xs font-mono border border-blue-400/30">
+                v1.0.0
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
+                <div class="flex items-center space-x-2 pb-2 border-b border-slate-100">
+                    <div class="bg-amber-100 text-amber-700 p-2 rounded-lg font-bold text-sm w-8 h-8 flex items-center justify-center">1</div>
+                    <h2 class="text-lg font-semibold text-slate-900">載入票價資料庫 (JSON, XML)</h2>
+                </div>
+                <p class="text-slate-500 text-xs">系統將自動載入TDX票價定義檔。若載入失敗或需更新，您可手動上傳進行覆寫（支援 <code>TRA.json</code>, <code>TRTC.xml</code>, <code>TYMC.xml</code>, <code>NTMC.xml</code>）。</p>
+                
+                <div id="db-drop-zone" class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-blue-500 transition cursor-pointer bg-slate-50">
+                    <input type="file" id="db-file-input" class="hidden" multiple accept=".json,.xml">
+                    <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4m0 5c0 2.21-3.58 4-8 4s-8-1.79-8-4" />
+                    </svg>
+                    <p class="mt-2 text-sm text-slate-600 font-medium">點擊或拖曳自訂 JSON, XML 檔案至此以覆寫</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 text-xs pt-2">
+                    <div class="p-2 rounded bg-slate-50 border border-slate-100 flex justify-between items-center">
+                        <span class="font-medium">台鐵 (TRA):</span>
+                        <span id="status-TRA" class="text-slate-400 font-bold">未載入</span>
+                    </div>
+                    <div class="p-2 rounded bg-slate-50 border border-slate-100 flex justify-between items-center">
+                        <span class="font-medium">北捷 (TRTC):</span>
+                        <span id="status-TRTC" class="text-slate-400 font-bold">未載入</span>
+                    </div>
+                    <div class="p-2 rounded bg-slate-50 border border-slate-100 flex justify-between items-center">
+                        <span class="font-medium">桃捷 (TYMC):</span>
+                        <span id="status-TYMC" class="text-slate-400 font-bold">未載入</span>
+                    </div>
+                    <div class="p-2 rounded bg-slate-50 border border-slate-100 flex justify-between items-center">
+                        <span class="font-medium">新北捷 (NTMC):</span>
+                        <span id="status-NTMC" class="text-slate-400 font-bold">未載入</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
+                <div class="flex items-center space-x-2 pb-2 border-b border-slate-100">
+                    <div class="bg-blue-100 text-blue-700 p-2 rounded-lg font-bold text-sm w-8 h-8 flex items-center justify-center">2</div>
+                    <h2 class="text-lg font-semibold text-slate-900">上傳歷史乘車明細 (PDF)</h2>
+                </div>
+                <p class="text-slate-500 text-xs">請上傳從捷運或台鐵悠遊卡查詢系統下載的 PDF 乘車明細（可多選）</p>
+                
+                <div id="pdf-drop-zone" class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-blue-500 transition cursor-pointer bg-slate-50">
+                    <input type="file" id="pdf-file-input" class="hidden" multiple accept=".pdf">
+                    <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p class="mt-2 text-sm text-slate-600 font-medium">點擊或拖曳多個明細 PDF 檔案至此</p>
+                </div>
+
+                <div class="flex justify-between items-center text-xs pt-2">
+                    <span id="pdf-file-count" class="text-slate-500">已選取 0 個 PDF 檔案</span>
+                    <button id="btn-clear" class="text-red-500 hover:text-red-700 font-medium hidden">清空所有資料</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="result-section" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6 hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-slate-100 gap-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900">票價計算與統計結果</h2>
+                    <p class="text-slate-500 text-xs mt-0.5">根據上傳之 PDF 與票價資料庫即時交叉比對計算</p>
+                </div>
+                <button id="btn-export" class="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-sm transition">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    匯出結果為 CSV 檔
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-gradient-to-br from-slate-50 to-slate-100 p-4 rounded-xl border border-slate-200/60">
+                    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">總乘車金額</div>
+                    <div class="mt-2 flex items-baseline text-3xl font-bold text-slate-900">
+                        <span id="stat-total-amount">0</span>
+                        <span class="ml-1 text-sm font-medium text-slate-500">元</span>
+                    </div>
+                </div>
+                <div class="bg-gradient-to-br from-slate-50 to-slate-100 p-4 rounded-xl border border-slate-200/60">
+                    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">總行程筆數</div>
+                    <div class="mt-2 flex items-baseline text-3xl font-bold text-slate-900">
+                        <span id="stat-total-trips">0</span>
+                        <span class="ml-1 text-sm font-medium text-slate-500">筆</span>
+                    </div>
+                </div>
+                <div id="warning-card" class="bg-gradient-to-br from-slate-50 to-slate-100 p-4 rounded-xl border border-slate-200/60 transition">
+                    <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">未成功對應 (0元)</div>
+                    <div class="mt-2 flex items-baseline text-3xl font-bold text-slate-900">
+                        <span id="stat-zero-trips">0</span>
+                        <span class="ml-1 text-sm font-medium text-slate-500">筆</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="log-panel" class="bg-slate-900 text-slate-200 rounded-lg p-3 font-mono text-xs max-h-32 overflow-y-auto space-y-1">
+                <div class="text-emerald-400">[系統初始化成功] 請載入資料庫並上傳 PDF 開始計算。</div>
+            </div>
+
+            <div class="flex items-center space-x-2 text-xs text-slate-600">
+                <span class="font-medium">篩選系統：</span>
+                <select id="filter-system" class="border border-slate-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="ALL">全部系統</option>
+                    <option value="TRA">台鐵 (TRA)</option>
+                    <option value="TRTC_MIXED">台北捷運/環狀線</option>
+                    <option value="TYMC">桃園捷運 (TYMC)</option>
+                </select>
+            </div>
+
+            <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                <table class="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">日期</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">運輸系統</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">起點站</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">終點站</th>
+                            <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">計算票價</th>
+                        </tr>
+                    </thead>
+                    <tbody id="result-tbody" class="bg-white divide-y divide-slate-200 text-slate-700">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-white border-t border-slate-200 mt-auto py-4">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400">
+            本工具完全於瀏覽器本地執行端解析，您的資料絕不會被上傳至任何伺服器。
+			&copy; GarryLai 2026
+        </div>
+    </footer>
+
+    <script>
+        // 設定 PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // --- 配置與常數設定 (Configuration) ---
+        const Config = {
+            SAME_STATION_FEE: { 'TRA': 22, 'DEFAULT': 20 },
+            MANUAL_PATCHES: {
+                '南勢角_幸福': 40, '幸福_南勢角': 40,
+                '劍潭_新北產業園區': 45, '新北產業園區_劍潭': 45,
+                '公館_景平': 30, '景平_公館': 30,
+				'先嗇宮_幸福': 20, '幸福_先嗇宮': 20
+            },
+            STATION_MAPPING: { '台北二': '台北', '臺北': '台北' },
+            // Regex 優化區
+            RE_REMOVE_NOISE: /[\s"'：:,]/g,
+            RE_PREFIX: /^(名稱|進站|出站|Station)/,
+            RE_SUFFIX_CUT: /(收費|金額|交易|扣款|票價|餘額|Entry|Exit|Purchase)/,
+            RE_REMOVE_ALPHANUM: /[a-zA-Z0-9]/g,
+            RE_DATE: /(\d{4}\/\d{2}\/\d{2})/g,
+            // 預設抓取路徑
+            DEFAULT_DB_URLS: {
+                'TRA': 'TRA.json',
+                'TRTC': 'TRTC.xml',
+                'TYMC': 'TYMC.xml',
+                'NTMC': 'NTMC.xml'
+            }
+        };
+
+        // UI 日誌系統
+        function logMsg(message, level = 'info') {
+            const panel = document.getElementById('log-panel');
+            const logItem = document.createElement('div');
+            const timeStr = new Date().toLocaleTimeString();
+            if (level === 'error') {
+                logItem.className = 'text-red-400';
+                logItem.textContent = `[${timeStr}] ❌ ${message}`;
+            } else if (level === 'warning') {
+                logItem.className = 'text-amber-400';
+                logItem.textContent = `[${timeStr}] ⚠️ ${message}`;
+            } else {
+                logItem.className = 'text-slate-300';
+                logItem.textContent = `[${timeStr}] ℹ️ ${message}`;
+            }
+            panel.appendChild(logItem);
+            panel.scrollTop = panel.scrollHeight;
+            console.log(`[${level.toUpperCase()}] ${message}`);
+        }
+
+        // --- 核心邏輯層 (Core Logic) ---
+
+        class StationNormalizer {
+            static cleanTextSafe(text) {
+                if (!text) return "";
+                return text.replace(Config.RE_REMOVE_NOISE, '');
+            }
+
+            static normalize(name) {
+                if (!name) return "";
+                name = name.replace(Config.RE_REMOVE_NOISE, '');
+                name = name.replace(Config.RE_PREFIX, '');
+                const match = name.match(Config.RE_SUFFIX_CUT);
+                if (match) name = name.substring(0, match.index);
+                name = name.replace(Config.RE_REMOVE_ALPHANUM, '');
+                name = name.replace(/臺/g, '台').replace(/車站/g, '');
+                if (name.length > 1 && name.endsWith('站')) {
+                    name = name.slice(0, -1);
+                }
+                return Config.STATION_MAPPING[name] || name.trim();
+            }
+        }
+
+        class FareDatabase {
+            constructor() {
+                this._db = { 'TRA': new Map(), 'TRTC': new Map(), 'TYMC': new Map(), 'NTMC': new Map() };
+            }
+
+            // isAutoLoad 參數決定是否為預設抓取。如果是手動上傳 (isAutoLoad=false)，會先清空舊的避免殘留。
+            loadDataFromJson(filename, data, isAutoLoad = false) {
+                let sysKey = '';
+                const upperName = filename.toUpperCase();
+                if (upperName.includes('TRA')) sysKey = 'TRA';
+                else if (upperName.includes('TRTC')) sysKey = 'TRTC';
+                else if (upperName.includes('TYMC')) sysKey = 'TYMC';
+                else if (upperName.includes('NTMC')) sysKey = 'NTMC';
+                
+                if (!sysKey) {
+                    logMsg(`無法識別對應系統的資料庫檔案: ${filename}`, 'warning');
+                    return false;
+                }
+
+                if (!Array.isArray(data)) return false;
+
+                // 如果是使用者手動上傳，清空原本預設載入的該系統資料
+                if (!isAutoLoad) {
+                    this._db[sysKey].clear();
+                    logMsg(`已清空預設的 [${sysKey}] 票價資料，準備以您的上傳檔覆寫。`, 'info');
+                }
+
+                let count = 0;
+                if (sysKey === 'TRA') {
+                    data.forEach(item => {
+                        try {
+                            const s = StationNormalizer.normalize(item.OriginStationName?.Zh_tw);
+                            const e = StationNormalizer.normalize(item.DestinationStationName?.Zh_tw);
+                            const fares = item.Fares || [];
+                            let price = 0;
+                            for (const t of ['成復', '成普', '成自']) {
+                                const found = fares.find(f => f.TicketType === t);
+                                if (found) { price = found.Price; break; }
+                            }
+                            if (price > 0 && s && e) {
+                                this._db['TRA'].set(`${s}_${e}`, price);
+                                count++;
+                            }
+                        } catch(err) {}
+                    });
+                } else {
+                    data.forEach(item => {
+                        try {
+                            const s = StationNormalizer.normalize(item.OriginStationName?.Zh_tw);
+                            const e = StationNormalizer.normalize(item.DestinationStationName?.Zh_tw);
+                            const priceObj = (item.Fares || []).find(f => String(f.FareClass) === '1');
+                            if (priceObj && s && e) {
+                                this._db[sysKey].set(`${s}_${e}`, priceObj.Price);
+                                count++;
+                            }
+                        } catch(err) {}
+                    });
+                }
+
+                const prefix = isAutoLoad ? "自動抓取" : "手動上傳";
+                document.getElementById(`status-${sysKey}`).textContent = `${count} 筆 (${isAutoLoad ? '預設' : '覆寫'})`;
+                document.getElementById(`status-${sysKey}`).className = "text-emerald-600 font-bold";
+                logMsg(`>> ${prefix}票價庫 [${sysKey}] 成功載入: ${count} 筆`, 'info');
+                return true;
+            }
+
+            getPrice(system, start, end) {
+                if (!start || !end) return 0;
+                if (start === end) return system === 'TRA' ? Config.SAME_STATION_FEE['TRA'] : Config.SAME_STATION_FEE['DEFAULT'];
+
+                const key1 = `${start}_${end}`;
+                const key2 = `${end}_${start}`;
+
+                if (Config.MANUAL_PATCHES[key1]) return Config.MANUAL_PATCHES[key1];
+                if (Config.MANUAL_PATCHES[key2]) return Config.MANUAL_PATCHES[key2];
+
+                let targets = [];
+                if (system === 'TRA') targets = ['TRA'];
+                else if (system === 'TYMC') targets = ['TYMC'];
+                else if (system === 'TRTC_MIXED') targets = ['TRTC', 'NTMC'];
+                else if (this._db[system]) targets = [system];
+
+                for (const dbName of targets) {
+                    const subDb = this._db[dbName];
+                    if (subDb.has(key1)) return subDb.get(key1);
+                    if (subDb.has(key2)) return subDb.get(key2);
+                }
+                return 0;
+            }
+        }
+
+        class PDFParser {
+            static async extractText(file) {
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    let fullText = "";
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        
+                        const items = textContent.items;
+                        items.sort((a, b) => {
+                            const yA = a.transform[5];
+                            const yB = b.transform[5];
+                            if (Math.abs(yA - yB) > 5) return yB - yA;
+                            return a.transform[4] - b.transform[4];
+                        });
+
+                        let pageText = "";
+                        let lastY = -1;
+                        for (const item of items) {
+                            const currentY = item.transform[5];
+                            if (lastY !== -1 && Math.abs(currentY - lastY) > 5) {
+                                pageText += "\n";
+                            }
+                            pageText += item.str + " ";
+                            lastY = currentY;
+                        }
+                        fullText += pageText + "\n";
+                    }
+                    return fullText;
+                } catch (e) {
+                    logMsg(`讀取 PDF 失敗 ${file.name}: ${e.message}`, 'error');
+                    return "";
+                }
+            }
+
+            static parseTrips(fullText) {
+                if (fullText.includes("桃園大眾捷運")) {
+                    return PDFParser._parseTy(fullText);
+                } else if (fullText.includes("國營臺灣鐵路")) {
+                    return PDFParser._parseTra(fullText);
+                } else if (fullText.includes("臺北大眾捷運") || fullText.includes("TRTC")) {
+                    return PDFParser._parseMixed(fullText);
+                }
+                return [];
+            }
+
+            static _parseTra(text) {
+                const cleanText = StationNormalizer.cleanTextSafe(text);
+                const dates = cleanText.match(Config.RE_DATE) || [];
+                
+                const stations = [];
+                const regexTRA = /臺鐵([\u4e00-\u9fa5]+?)(?:車站|站)/g;
+                let match;
+                while ((match = regexTRA.exec(cleanText)) !== null) {
+                    stations.push(match[1]);
+                }
+
+                const trips = [];
+                const n = Math.min(dates.length, Math.floor(stations.length / 2));
+                for (let i = 0; i < n; i++) {
+                    trips.push({
+                        date: dates[i],
+                        system: 'TRA',
+                        start: StationNormalizer.normalize(stations[i * 2]),
+                        end: StationNormalizer.normalize(stations[i * 2 + 1])
+                    });
+                }
+                return trips;
+            }
+
+            static _parseTy(text) {
+                const cleanText = StationNormalizer.cleanTextSafe(text);
+                const dates = cleanText.match(Config.RE_DATE) || [];
+                
+                const rawStations = [];
+                const regexTY = /(?:名稱)?([\u4e00-\u9fa50-9]{2,10}站)/g;
+                let match;
+                while ((match = regexTY.exec(cleanText)) !== null) {
+                    rawStations.push(match[1]);
+                }
+
+                const realStations = [];
+                const ignoreSet = ['進站', '出站', '網站', '本站'];
+                for (const rs of rawStations) {
+                    if (!ignoreSet.some(x => rs.includes(x))) {
+                        realStations.push(StationNormalizer.normalize(rs));
+                    }
+                }
+
+                const trips = [];
+                const n = Math.min(dates.length, Math.floor(realStations.length / 2));
+                for (let i = 0; i < n; i++) {
+                    trips.push({
+                        date: dates[i],
+                        system: 'TYMC',
+                        start: realStations[i * 2],
+                        end: realStations[i * 2 + 1]
+                    });
+                }
+                return trips;
+            }
+
+            static _parseMixed(text) {
+                const cleanText = StationNormalizer.cleanTextSafe(text);
+                const dates = cleanText.match(Config.RE_DATE) || [];
+                
+                const matches = [];
+                const regexMixed = /進站名稱(?:EntryStation)?(.*?)出站名稱(?:ExitStation)?(.*?)(?:車資|票價|收費|金額|單程票|電子票證|交易|餘額|\d{1,3}元|\d|$)/g;
+                let match;
+                while ((match = regexMixed.exec(cleanText)) !== null) {
+                    matches.push([match[1], match[2]]);
+                }
+
+                const trips = [];
+                const n = Math.min(dates.length, matches.length);
+                for (let i = 0; i < n; i++) {
+                    trips.push({
+                        date: dates[i],
+                        system: 'TRTC_MIXED',
+                        start: StationNormalizer.normalize(matches[i][0]),
+                        end: StationNormalizer.normalize(matches[i][1])
+                    });
+                }
+                return trips;
+            }
+        }
+
+        // --- 全局狀態管理與事件處理器 (App State & Handlers) ---
+
+        const fareDb = new FareDatabase();
+        let allTrips = [];
+
+        // 自動利用 fetch 載入預設資料庫
+        async function fetchDefaultDatabases() {
+            logMsg("開始嘗試自動抓取同目錄下的預設票價資料庫...", "info");
+            for (const [sys, url] of Object.entries(Config.DEFAULT_DB_URLS)) {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`HTTP 狀態碼: ${response.status}`);
+                    const data = await response.json();
+                    fareDb.loadDataFromJson(`${sys}.json`, data, true);
+                } catch (err) {
+                    // 若是本地開啟 (file://) 或檔案不存在，會跳到這裡
+                    logMsg(`自動抓取 [${sys}] 失敗，若您是直接在本地開啟 HTML 檔為正常現象，請手動上傳覆寫即可。(${err.message})`, "warning");
+                }
+            }
+            // 若自動抓取前已經有上傳過 PDF（不太可能，但預防），順便重算
+            if (allTrips.length > 0) recalculateFares();
+        }
+
+        // 當畫面準備好後自動觸發 fetch
+        window.addEventListener('DOMContentLoaded', fetchDefaultDatabases);
+
+        // 綁定檔案上傳事件
+        setupDropZone('db-drop-zone', 'db-file-input', handleDbFiles);
+        setupDropZone('pdf-drop-zone', 'pdf-file-input', handlePdfFiles);
+
+        function setupDropZone(zoneId, inputId, callback) {
+            const zone = document.getElementById(zoneId);
+            const input = document.getElementById(inputId);
+
+            zone.addEventListener('click', () => input.click());
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.classList.add('drop-zone--over');
+            });
+            ['dragleave', 'dragend'].forEach(type => {
+                zone.addEventListener(type, () => zone.classList.remove('drop-zone--over'));
+            });
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('drop-zone--over');
+                if (e.dataTransfer.files.length) {
+                    callback(e.dataTransfer.files);
+                }
+            });
+            input.addEventListener('change', () => {
+                if (input.files.length) {
+                    callback(input.files);
+                }
+            });
+        }
+
+        function handleDbFiles(files) {
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        // isAutoLoad 設為 false，代表使用者手動上傳
+                        fareDb.loadDataFromJson(file.name, data, false);
+                        if (allTrips.length > 0) recalculateFares();
+                    } catch(err) {
+                        logMsg(`解析資料庫 JSON 發生錯誤 (${file.name}): ${err.message}`, 'error');
+                    }
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        async function handlePdfFiles(files) {
+            document.getElementById('pdf-file-count').textContent = `已載入 ${files.length} 個 PDF 檔案，正在解析...`;
+            logMsg(`開始處理 ${files.length} 個明細檔案...`);
+            
+            allTrips = [];
+            for (const file of Array.from(files)) {
+                logMsg(`正在讀取: ${file.name}`);
+                const fullText = await PDFParser.extractText(file);
+                if (fullText) {
+                    const trips = PDFParser.parseTrips(fullText);
+                    logMsg(`  -> 從 ${file.name} 內成功提取出 ${trips.length} 筆行程`);
+                    allTrips.push(...trips);
+                }
+            }
+
+            if (allTrips.length === 0) {
+                logMsg('未提取到任何有效乘車明細行程，請檢視 PDF 格式是否正確。', 'warning');
+                return;
+            }
+
+            document.getElementById('btn-clear').classList.remove('hidden');
+            recalculateFares();
+        }
+
+        function recalculateFares() {
+            logMsg('開始計算與媒合各行程票價...');
+            
+            allTrips.forEach(trip => {
+                trip.original_fare = fareDb.getPrice(trip.system, trip.start, trip.end);
+            });
+
+            allTrips.sort((a, b) => a.date.localeCompare(b.date) || a.system.localeCompare(b.system));
+
+            document.getElementById('result-section').classList.remove('hidden');
+            
+            const totalAmount = allTrips.reduce((sum, t) => sum + t.original_fare, 0);
+            const zeroFares = allTrips.filter(t => t.original_fare === 0).length;
+
+            document.getElementById('stat-total-amount').textContent = totalAmount.toLocaleString();
+            document.getElementById('stat-total-trips').textContent = allTrips.length;
+            document.getElementById('stat-zero-trips').textContent = zeroFares;
+
+            const warningCard = document.getElementById('warning-card');
+            if (zeroFares > 0) {
+                warningCard.className = "bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-xl border border-amber-200 text-amber-900 font-medium";
+                logMsg(`注意：仍有 ${zeroFares} 筆行程計算為 0 元。`, 'warning');
+            } else {
+                warningCard.className = "bg-gradient-to-br from-emerald-50 to-emerald-100 p-4 rounded-xl border border-emerald-200 text-emerald-900 font-medium";
+                logMsg('恭喜！所有行程皆已成功取得對應票價。', 'info');
+            }
+
+            renderTable('ALL');
+        }
+
+        function renderTable(filterSystem) {
+            const tbody = document.getElementById('result-tbody');
+            tbody.innerHTML = '';
+
+            const filtered = filterSystem === 'ALL' ? allTrips : allTrips.filter(t => t.system === filterSystem);
+
+            filtered.forEach(trip => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                
+                let sysDisplay = trip.system;
+                if (trip.system === 'TRTC_MIXED') sysDisplay = '台北捷運/環狀線';
+                else if (trip.system === 'TYMC') sysDisplay = '桃園捷運';
+                else if (trip.system === 'TRA') sysDisplay = '台鐵';
+
+                const fareClass = trip.original_fare === 0 ? "text-red-500 font-bold" : "text-slate-900 font-semibold";
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-slate-600 font-mono">${trip.date}</td>
+                    <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 py-0.5 rounded text-xs font-medium ${trip.system === 'TRA' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">${sysDisplay}</span></td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium">${trip.start || '（未知）'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium">${trip.end || '（未知）'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right ${fareClass}">${trip.original_fare} 元</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('filter-system').addEventListener('change', (e) => {
+            renderTable(e.target.value);
+        });
+
+        document.getElementById('btn-clear').addEventListener('click', () => {
+            allTrips = [];
+            document.getElementById('result-section').classList.add('hidden');
+            document.getElementById('pdf-file-count').textContent = '已選取 0 個 PDF 檔案';
+            document.getElementById('btn-clear').classList.add('hidden');
+            document.getElementById('pdf-file-input').value = '';
+            logMsg('資料已清空。');
+        });
+
+        document.getElementById('btn-export').addEventListener('click', () => {
+            if (allTrips.length === 0) return;
+
+            let csvRows = ["\uFEFF日期,系統,起點,終點,原價"]; 
+
+            allTrips.forEach(t => {
+                const sys = t.system === 'TRTC_MIXED' ? 'TRTC/NTMC' : t.system;
+                csvRows.push([t.date, sys, t.start || '', t.end || '', t.original_fare].join(','));
+            });
+
+            const csvContent = csvRows.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", "final_fare_result.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            logMsg('CSV 檔案匯出成功！');
+        });
+    </script>
+</body>
+</html>
