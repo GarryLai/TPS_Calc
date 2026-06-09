@@ -469,7 +469,7 @@
 
         // 自動利用 fetch 載入預設資料庫
         async function fetchDefaultDatabases() {
-            logMsg("開始嘗試自動抓取同目錄下的預設票價資料庫...", "info");
+            logMsg("開始自動抓取預設票價資料庫...", "info");
             for (const [sys, url] of Object.entries(Config.DEFAULT_DB_URLS)) {
                 try {
                     const response = await fetch(url);
@@ -478,7 +478,7 @@
                     fareDb.loadDataFromJson(`${sys}.json`, data, true);
                 } catch (err) {
                     // 若是本地開啟 (file://) 或檔案不存在，會跳到這裡
-                    logMsg(`自動抓取 [${sys}] 失敗，若您是直接在本地開啟 HTML 檔為正常現象，請手動上傳覆寫即可。(${err.message})`, "warning");
+                    logMsg(`自動抓取 [${sys}] 失敗，請手動上傳覆寫。(${err.message})`, "warning");
                 }
             }
             // 若自動抓取前已經有上傳過 PDF（不太可能，但預防），順便重算
